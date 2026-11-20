@@ -1,6 +1,12 @@
 #!/bin/bash
 # shellcheck disable=SC1090,SC2086,SC2034,SC1091,SC2027,SC2206,SC2002
 
+# November 20, 2026
+# Derived from......:                https://github.com/MaximeMichaud/nginx-autoinstall/tree/959d570777f82c13b83515c1160bbc879d575a98
+# Derived direct URL: https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/959d570777f82c13b83515c1160bbc879d575a98/nginx-autoinstall.sh
+# URL...............:
+# Direct URL........:
+
 if [[ $EUID -ne 0 ]]; then
 	echo -e "Sorry, you need to run this as root"
 	exit 1
@@ -41,7 +47,7 @@ LIBMAXMINDDB_VER=${LIBMAXMINDDB_VER:-1.14.1}
 GEOIP2_VER=${GEOIP2_VER:-3.4}
 LUA_JIT_VER=${LUA_JIT_VER:-2.1-20261117}
 LUA_NGINX_VER=${LUA_NGINX_VER:-0.10.31}
-LUA_RESTYCORE_VER=${LUA_RESTYCORE_VER:-0.1.32}
+LUA_RESTYCORE_VER=${LUA_RESTYCORE_VER:-0.1.34rc3}  # must match LUA_NGINX_VER: resty-core checks for an exact lua-nginx-module version (0.1.34 = 0.10.31)
 LUA_RESTYLRUCACHE_VER=${LUA_RESTYLRUCACHE_VER:-0.15}
 NGINX_DEV_KIT=${NGINX_DEV_KIT:-0.3.4}
 HTTPREDIS_VER=${HTTPREDIS_VER:-0.4.2}
@@ -142,6 +148,7 @@ if [[ $HEADLESS == "y" ]]; then
     USFAIR=${USFAIR:-n}
 	RM_CONF=${RM_CONF:-y}
 	RM_LOGS=${RM_LOGS:-y}
+	RESTART_NGINX=${RESTART_NGINX:-y}
 fi
 
 ####### My additions: AUTHPAM and USFAIR above
@@ -200,10 +207,10 @@ case $OPTION in
 		echo ""
 		echo "Modules to install :"
 		while [[ $HTTP3 != "y" && $HTTP3 != "n" ]]; do
-			read -rp "       HTTP/3 (⚠️ Patch by Cloudflare, will install BoringSSL, Quiche, Rust and Go) [y/n]: " -e -i n HTTP3
+			read -rp "       HTTP/3 (native nginx module) [y/n]: " -e -i y HTTP3
 		done
 		while [[ $TLSDYN != "y" && $TLSDYN != "n" ]]; do
-			read -rp "       Cloudflare's TLS Dynamic Record Resizing patch [y/n]: " -e -i n TLSDYN
+			read -rp "       Cloudflare's TLS Dynamic Record Resizing patch [y/n]: " -e -i y TLSDYN
 		done
 		while [[ $HPACK != "y" && $HPACK != "n" ]]; do
 			read -rp "       Cloudflare's full HPACK encoding patch [y/n]: " -e -i n HPACK
@@ -265,11 +272,11 @@ case $OPTION in
 		while [[ $NGXECHO != "y" && $NGXECHO != "n" ]]; do
 			read -rp "       echo-nginx-module [y/n]: " -e -i y NGXECHO
 		done
-		while [[ $ZLIBNG != "y" && $ZLIBNG != "y" ]]; do
-			read -rp "       zlib-ng [y/n]: " -e -i n ZLIBNG
+		while [[ $ZLIBNG != "y" && $ZLIBNG != "n" ]]; do
+			read -rp "       zlib-ng [y/n]: " -e -i y ZLIBNG
 		done
-		while [[ $PCRE2 != "y" && $PCRE2 != "y" ]]; do
-			read -rp "       pcre2 [y/n]: " -e -i n PCRE2
+		while [[ $PCRE2 != "y" && $PCRE2 != "n" ]]; do
+			read -rp "       pcre2 [y/n]: " -e -i y PCRE2
 		done
 		while [[ $NGXWAF != "y" && $NGXWAF != "n" ]]; do
 			read -rp "       ngx_waf [y/n]: " -e -i n NGXWAF
@@ -295,7 +302,7 @@ case $OPTION in
 				read -rp "       Enter your Maxmind license key: " -e GEOIP2_LICENSE_KEY
 		fi
 
-		if [[ $HTTP3 != 'y' ]]; then
+		if true; then
 			echo ""
 			echo "Choose your OpenSSL implementation:"
 			echo "   1) System's OpenSSL ($(openssl version | cut -c9-14))"
@@ -307,7 +314,7 @@ case $OPTION in
 			done
 		fi
 	fi
-	if [[ $HTTP3 != 'y' ]]; then
+	if true; then
 		case $SSL in
 		1 | SYSTEM) ;;
 
@@ -471,7 +478,7 @@ case $OPTION in
 			# Download GeoIP.conf for use with geoipupdate
 			if [[ ! -f /usr/local/etc/GeoIP.conf ]]; then
 				cd /usr/local/etc || exit 1
-				wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/conf/GeoIP.conf
+				wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/conf/GeoIP.conf
 				sed -i "s/YOUR_ACCOUNT_ID_HERE/${GEOIP2_ACCOUNT_ID}/g" GeoIP.conf
 				sed -i "s/YOUR_LICENSE_KEY_HERE/${GEOIP2_LICENSE_KEY}/g" GeoIP.conf
 			else
@@ -521,15 +528,13 @@ case $OPTION in
 		cd /usr/local/src/nginx/modules || exit 1
 		wget https://github.com/openresty/lua-resty-core/archive/v${LUA_RESTYCORE_VER}.tar.gz
 		tar xaf v${LUA_RESTYCORE_VER}.tar.gz
-		cd lua-resty-core-${LUA_RESTYCORE_VER} || exit 1
-		make install PREFIX=/etc/nginx
+		# installed after nginx is built (see below), so a failed build
+		# doesn't leave Lua libs that are newer than the running binary
 
 		# lua-resty-lrucache download
 		cd /usr/local/src/nginx/modules || exit 1
 		wget https://github.com/openresty/lua-resty-lrucache/archive/v${LUA_RESTYLRUCACHE_VER}.tar.gz
 		tar xaf v${LUA_RESTYLRUCACHE_VER}.tar.gz
-		cd lua-resty-lrucache-${LUA_RESTYLRUCACHE_VER} || exit 1
-		make install PREFIX=/etc/nginx
 	fi
 
 	# LibreSSL
@@ -614,6 +619,7 @@ case $OPTION in
 
                 # Fixes applied, recommended per https://share.google/aimode/JFL7z51xLcSQasnuc
                 wget https://codeload.github.com/itoffshore/nginx-upstream-fair/zip/refs/heads/master -O upstream_fair_module.zip
+                unzip -o upstream_fair_module.zip || exit 1
                 
                 # These were the old configs, kept for posterity's sake -- can be removed
                 ##wget https://codeload.github.com/gnosek/nginx-upstream-fair/zip/refs/heads/master -O upstream_fair_module.zip
@@ -684,7 +690,7 @@ case $OPTION in
 	if [[ ! -e /etc/nginx/nginx.conf ]]; then
 		mkdir -p /etc/nginx
 		cd /etc/nginx || exit 1
-		wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/conf/nginx.conf
+		wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/conf/nginx.conf
 	fi
 	cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
 
@@ -884,7 +890,6 @@ case $OPTION in
 
 ####### END My addition
 
-
 	if [[ $ZLIBNG == 'y' ]]; then
 		NGINX_MODULES=$(
 			echo "$NGINX_MODULES"
@@ -930,37 +935,22 @@ case $OPTION in
 
 	# use zlib-ng instead of zlib
 	if [[ $ZLIBNG == 'y' ]]; then
-		wget https://raw.githubusercontent.com/maximemichaud/nginx-autoinstall/refs/heads/master/patches/nginx_zlib-ng.patch -O nginx_zlib-ng.patch
+		wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/refs/heads/master/patches/nginx_zlib-ng.patch -O nginx_zlib-ng.patch
 		patch -p1 <nginx_zlib-ng.patch
 	fi
 
-	# HTTP3
+####### My addition: switch to nginx's native HTTP3 module. Cloudflare's is outdated.
+
+	# HTTP3 - native nginx module (nginx >= 1.25). Cloudflare's quiche patch no longer exists.
+	# With OpenSSL < 3.5 nginx uses its QUIC compatibility layer (no 0-RTT/early data).
 	if [[ $HTTP3 == 'y' ]]; then
-		cd /usr/local/src/nginx/modules || exit 1
-		git clone --depth 1 --recursive https://github.com/cloudflare/quiche
-		# Dependencies for BoringSSL and Quiche
-		apt-get install -y golang
-		# Rust is not packaged so that's the only way...
-		curl -sSf https://sh.rustup.rs | sh -s -- -y
-		source "$HOME/.cargo/env"
-
-		cd /usr/local/src/nginx/nginx-${NGINX_VER} || exit 1
-		# Apply actual patch
-		patch -p01 </usr/local/src/nginx/modules/quiche/nginx/nginx-1.16.patch
-
-		# Apply patch for nginx > 1.19.7 (source: https://github.com/cloudflare/quiche/issues/936#issuecomment-857618081)
-		wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/patches/nginx-http3-1.19.7.patch -O nginx-http3.patch
-		patch -p01 <nginx-http3.patch
-
-		NGINX_OPTIONS=$(
-			echo "$NGINX_OPTIONS"
-			echo --with-openssl=/usr/local/src/nginx/modules/quiche/quiche/deps/boringssl --with-quiche=/usr/local/src/nginx/modules/quiche
-		)
 		NGINX_MODULES=$(
 			echo "$NGINX_MODULES"
 			echo --with-http_v3_module
 		)
 	fi
+
+####### END My addition
 
 	# Cloudflare's Cloudflare's full HPACK encoding patch
 	if [[ $HPACK == 'y' ]]; then
@@ -970,7 +960,7 @@ case $OPTION in
 
 		else
 			# Same patch as above but fixed conflicts with the HTTP/3 patch
-			wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/patches/nginx_hpack_push_with_http3.patch -O nginx_http2_hpack.patch
+			wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/patches/nginx_hpack_push_with_http3.patch -O nginx_http2_hpack.patch
 		fi
 		patch -p1 <nginx_http2_hpack.patch
 
@@ -985,7 +975,7 @@ case $OPTION in
 		export LUAJIT_INC=/usr/local/include/luajit-2.1/
 	fi
 
-	./configure $NGINX_OPTIONS $NGINX_MODULES
+	./configure $NGINX_OPTIONS $NGINX_MODULES || { echo "ERROR: configure failed - existing nginx left untouched"; exit 1; }
 
 	if [[ $NGXWAF == 'y' ]]; then
 		sed -i 's/^\(CFLAGS.*\)/\1 -fstack-protector-strong -Wno-sign-compare -Wno-unused-function/' objs/Makefile
@@ -995,8 +985,36 @@ case $OPTION in
         echo ./configure $NGINX_OPTIONS $NGINX_MODULES >> config_command.txt
 ####### END My addition
 
-	make -j "$(nproc)"
-	make install
+####### My addition: backup old nginx binary with version and timestamp in filename, backup lua also
+
+	make -j "$(nproc)" || { echo "ERROR: make failed - existing nginx left untouched"; exit 1; }
+	# Keep a versioned copy of the current binary before make install replaces it
+	# (make install itself only keeps one previous copy, as /usr/sbin/nginx.old)
+	if [[ -x /usr/sbin/nginx ]]; then
+		OLD_NGINX_VER=$(/usr/sbin/nginx -v 2>&1 | cut -d/ -f2)
+		NGINX_BACKUP="/usr/sbin/nginx-${OLD_NGINX_VER}"
+		# Don't overwrite an existing backup (e.g. when rebuilding the same version)
+		if [[ -e $NGINX_BACKUP ]]; then
+			NGINX_BACKUP="${NGINX_BACKUP}-$(date +%Y%m%d-%H%M%S)"
+		fi
+		cp -p /usr/sbin/nginx "$NGINX_BACKUP" && echo "Backed up current nginx binary to $NGINX_BACKUP"
+		# Also snapshot the Lua libraries that match this binary (lua-resty-core must
+		# match lua-nginx-module exactly), so a rollback can restore both together
+		if [[ -d /etc/nginx/lib/lua ]]; then
+			LUA_BACKUP="/etc/nginx/lib/lua-backup-${NGINX_BACKUP#/usr/sbin/nginx-}.tar.gz"
+			tar -czf "$LUA_BACKUP" -C /etc/nginx/lib lua && echo "Backed up Lua libraries to $LUA_BACKUP"
+		fi
+	fi
+
+	make install || { echo "ERROR: make install failed"; exit 1; }
+
+	# Install the Lua libraries only now that the matching lua-nginx-module is installed
+	if [[ $LUA == 'y' ]]; then
+		(cd /usr/local/src/nginx/modules/lua-resty-core-${LUA_RESTYCORE_VER} && make install PREFIX=/etc/nginx) || exit 1
+		(cd /usr/local/src/nginx/modules/lua-resty-lrucache-${LUA_RESTYLRUCACHE_VER} && make install PREFIX=/etc/nginx) || exit 1
+	fi
+
+####### END My addition
 
 ####### My addition: commenting out the following lines
 #       # remove debugging symbols
@@ -1007,14 +1025,14 @@ case $OPTION in
 	# Using the official systemd script and logrotate conf from nginx.org
 	if [[ ! -e /lib/systemd/system/nginx.service ]]; then
 		cd /lib/systemd/system/ || exit 1
-		wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/conf/nginx.service
+		wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/conf/nginx.service
 		# Enable nginx start at boot
 		systemctl enable nginx
 	fi
 
 	if [[ ! -e /etc/logrotate.d/nginx ]]; then
 		cd /etc/logrotate.d/ || exit 1
-		wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/conf/nginx-logrotate -O nginx
+		wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/conf/nginx-logrotate -O nginx
 	fi
 
 	# Nginx's cache directory is not created by default
@@ -1036,8 +1054,29 @@ case $OPTION in
 		# add necessary `lua_package_path` directive to `nginx.conf`, in the http context
 		echo -e 'lua_package_path "/etc/nginx/lib/lua/?.lua;;";' >/etc/nginx/conf.d/lua_package_path.conf
 	fi
-	# Restart Nginx
-	systemctl restart nginx
+
+####### My addition: restart nginx binary option (asked after module selection)
+
+	# Restart Nginx (optional) - test the config first so a bad config doesn't take the site down
+	if [[ $HEADLESS != "y" ]]; then
+		echo ""
+		while [[ $RESTART_NGINX != "y" && $RESTART_NGINX != "n" ]]; do
+			read -rp "Restart the nginx service now? [y/n]: " -e -i y RESTART_NGINX
+		done
+	fi
+	if [[ $RESTART_NGINX == 'y' ]]; then
+		if /usr/sbin/nginx -t; then
+			systemctl restart nginx
+			systemctl --no-pager status nginx
+		else
+			echo "ERROR: nginx -t failed - nginx was NOT restarted (the old process is still running)"
+		fi
+	else
+		echo "Skipping restart. The new binary is installed at /usr/sbin/nginx, but the running"
+		echo "process is still the old version until you run: nginx -t && systemctl restart nginx"
+	fi
+
+####### END My addition
 
 	# Block Nginx from being installed via APT
 	if [[ $(lsb_release -si) == "Debian" ]] || [[ $(lsb_release -si) == "Ubuntu" ]]; then
@@ -1100,7 +1139,7 @@ case $OPTION in
 	exit
 	;;
 3) # Update the script
-	wget https://raw.githubusercontent.com/MaximeMichaud/nginx-autoinstall/master/nginx-autoinstall.sh -O nginx-autoinstall.sh
+	wget https://raw.githubusercontent.com/pksml85/nginx-autoinstall/master/nginx-autoinstall.sh -O nginx-autoinstall.sh
 	chmod +x nginx-autoinstall.sh
 	echo ""
 	echo "Update done."
