@@ -48,6 +48,11 @@ HTTPREDIS_VER=${HTTPREDIS_VER:-0.4.2}
 NGXECHO_VER=${NGXECHO_VER:-0.66}
 ZLIBNG_VER=${ZLIBNG_VER:-2.3.3}
 PCRE2_VER=${PCRE2_VER:-10.49}
+
+####### My additions
+AUTHPAM_VER=${AUTHPAM_VER:-1.5.5}
+####### END My additions
+
 # Define options
 NGINX_OPTIONS=${NGINX_OPTIONS:-"
 	--prefix=/etc/nginx \
@@ -62,9 +67,11 @@ NGINX_OPTIONS=${NGINX_OPTIONS:-"
 	--http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp \
 	--user=nginx \
 	--group=nginx \
-	--with-cc-opt=-O2 \
 	--with-cc-opt=-Wno-deprecated-declarations \
 	--with-cc-opt=-Wno-ignored-qualifiers"}
+
+####### My additions: removed --with-cc-opt=-O2 \ after --group
+
 # Define modules
 NGINX_MODULES=${NGINX_MODULES:-"--with-threads \
 	--with-file-aio \
@@ -79,7 +86,26 @@ NGINX_MODULES=${NGINX_MODULES:-"--with-threads \
 	--with-http_realip_module \
 	--with-http_sub_module \
 	--with-http_degradation_module \
-	--with-http_secure_link_module"}
+	--with-http_secure_link_module \
+    --with-compat \
+    --with-debug \
+    --with-pcre-jit \
+    --with-stream_ssl_module \
+    --with-stream_ssl_preread_module \
+    --with-stream_realip_module \
+    --with-stream \
+    --with-stream_geoip_module \
+    --with-http_image_filter_module \
+    --with-http_addition_module \
+    --with-http_gzip_static_module \
+    --with-http_gunzip_module \
+    --with-http_flv_module \
+
+    --with-http_perl_module \
+    --with-http_xslt_module"}
+
+####### My additions: --with-compat to the end of module list above
+
 
 # Define installation parameters for headless install (fallback if unspecified)
 if [[ $HEADLESS == "y" ]]; then
@@ -112,9 +138,13 @@ if [[ $HEADLESS == "y" ]]; then
 	NGXWAF=${NGXWAF:-n}
 	HPACK=${HPACK:-n}
 	SSL=${SSL:-1}
+    AUTHPAM=${AUTHPAM:-n}
+    USFAIR=${USFAIR:-n}
 	RM_CONF=${RM_CONF:-y}
 	RM_LOGS=${RM_LOGS:-y}
 fi
+
+####### My additions: AUTHPAM and USFAIR above
 
 # Clean screen before launching menu
 if [[ $HEADLESS == "n" ]]; then
@@ -133,7 +163,7 @@ if [[ $HEADLESS != "y" ]]; then
 	echo "   5) Exit"
 	echo ""
 	while [[ $OPTION != "1" && $OPTION != "2" && $OPTION != "3" && $OPTION != "4" && $OPTION != "5" ]]; do
-		read -rp "Select an option [1-5]: " OPTION
+		read -rp "Select an option [1-5]: " -e -i 1 OPTION
 	done
 fi
 
@@ -148,7 +178,7 @@ case $OPTION in
 		echo "   2) Mainline $NGINX_MAINLINE_VER"
 		echo ""
 		while [[ $NGINX_VER != "1" && $NGINX_VER != "2" && $NGINX_VER != "STABLE" && $NGINX_VER != "MAINLINE" ]]; do
-			read -rp "Select an option [1-2]: " -e -i 1 NGINX_VER
+			read -rp "Select an option [1-2]: " -e -i 2 NGINX_VER
 		done
 	fi
 	case $NGINX_VER in
@@ -182,37 +212,37 @@ case $OPTION in
 			read -rp "       PageSpeed $NPS_VER [y/n]: " -e -i n PAGESPEED
 		done
 		while [[ $BROTLI != "y" && $BROTLI != "n" ]]; do
-			read -rp "       Brotli [y/n]: " -e -i n BROTLI
+			read -rp "       Brotli [y/n]: " -e -i y BROTLI
 		done
 		while [[ $HEADERMOD != "y" && $HEADERMOD != "n" ]]; do
-			read -rp "       Headers More $HEADERMOD_VER [y/n]: " -e -i n HEADERMOD
+			read -rp "       Headers More $HEADERMOD_VER [y/n]: " -e -i y HEADERMOD
 		done
 		while [[ $GEOIP != "y" && $GEOIP != "n" ]]; do
-			read -rp "       GeoIP [y/n]: " -e -i n GEOIP
+			read -rp "       GeoIP [y/n]: " -e -i y GEOIP
 		done
 		while [[ $FANCYINDEX != "y" && $FANCYINDEX != "n" ]]; do
-			read -rp "       Fancy index [y/n]: " -e -i n FANCYINDEX
+			read -rp "       Fancy index [y/n]: " -e -i y FANCYINDEX
 		done
 		while [[ $CACHEPURGE != "y" && $CACHEPURGE != "n" ]]; do
-			read -rp "       ngx_cache_purge [y/n]: " -e -i n CACHEPURGE
+			read -rp "       ngx_cache_purge [y/n]: " -e -i y CACHEPURGE
 		done
 		while [[ $SUBFILTER != "y" && $SUBFILTER != "n" ]]; do
-			read -rp "       nginx_substitutions_filter [y/n]: " -e -i n SUBFILTER
+			read -rp "       nginx_substitutions_filter [y/n]: " -e -i y SUBFILTER
 		done
 		while [[ $LUA != "y" && $LUA != "n" ]]; do
-			read -rp "       ngx_http_lua_module [y/n]: " -e -i n LUA
+			read -rp "       ngx_http_lua_module [y/n]: " -e -i y LUA
 		done
 		while [[ $WEBDAV != "y" && $WEBDAV != "n" ]]; do
-			read -rp "       nginx WebDAV [y/n]: " -e -i n WEBDAV
+			read -rp "       nginx WebDAV [y/n]: " -e -i y WEBDAV
 		done
 		while [[ $VTS != "y" && $VTS != "n" ]]; do
-			read -rp "       nginx VTS [y/n]: " -e -i n VTS
+			read -rp "       nginx VTS [y/n]: " -e -i y VTS
 		done
 		while [[ $RTMP != "y" && $RTMP != "n" ]]; do
-			read -rp "       nginx RTMP [y/n]: " -e -i n RTMP
+			read -rp "       nginx RTMP [y/n]: " -e -i y RTMP
 		done
 		while [[ $TESTCOOKIE != "y" && $TESTCOOKIE != "n" ]]; do
-			read -rp "       nginx testcookie [y/n]: " -e -i n TESTCOOKIE
+			read -rp "       nginx testcookie [y/n]: " -e -i y TESTCOOKIE
 		done
 		while [[ $MODSEC != "y" && $MODSEC != "n" ]]; do
 			read -rp "       nginx ModSecurity [y/n]: " -e -i n MODSEC
@@ -230,20 +260,34 @@ case $OPTION in
 			read -rp "       srcache-nginx-module [y/n]: " -e -i n SRCACHE
 		done
 		while [[ $SETMISC != "y" && $SETMISC != "n" ]]; do
-			read -rp "       set-misc-nginx-module [y/n]: " -e -i n SETMISC
+			read -rp "       set-misc-nginx-module [y/n]: " -e -i y SETMISC
 		done
 		while [[ $NGXECHO != "y" && $NGXECHO != "n" ]]; do
-			read -rp "       echo-nginx-module [y/n]: " -e -i n NGXECHO
+			read -rp "       echo-nginx-module [y/n]: " -e -i y NGXECHO
 		done
-		while [[ $ZLIBNG != "y" && $ZLIBNG != "n" ]]; do
+		while [[ $ZLIBNG != "y" && $ZLIBNG != "y" ]]; do
 			read -rp "       zlib-ng [y/n]: " -e -i n ZLIBNG
 		done
-		while [[ $PCRE2 != "y" && $PCRE2 != "n" ]]; do
+		while [[ $PCRE2 != "y" && $PCRE2 != "y" ]]; do
 			read -rp "       pcre2 [y/n]: " -e -i n PCRE2
 		done
 		while [[ $NGXWAF != "y" && $NGXWAF != "n" ]]; do
 			read -rp "       ngx_waf [y/n]: " -e -i n NGXWAF
 		done
+
+####### My additions
+
+                while [[ $AUTHPAM != "y" && $AUTHPAM != "n" ]]; do
+                        read -rp "       auth-pam-module [y/n]: " -e -i y AUTHPAM
+                done
+
+                while [[ $USFAIR != "y" && $USFAIR != "n" ]]; do
+                        read -rp "       upstream-fair-module [y/n]: " -e -i y USFAIR
+                done
+
+####### END My additions
+
+####### My additions: auto-selections above (the "-e -i y" args above)
 
 		if [[ $GEOIP = 'y' ]]; then
 			# - Ask for a Maxmind user id and license key if headless=n
@@ -297,6 +341,11 @@ case $OPTION in
 		PCRE_PACKAGES="libpcre3 libpcre3-dev $PCRE_PACKAGES"
 	fi
 	apt-get install -y build-essential ca-certificates wget curl $PCRE_PACKAGES autoconf unzip automake libtool tar git libssl-dev zlib1g-dev uuid-dev lsb-release libxml2-dev libxslt1-dev cmake
+
+####### My additions
+        # libgd-dev is for the image filter module / libgeoip-dev is for the GeoIP module / libpam0g-dev is for the auth-pam module / libperl-dev is for ???
+        apt-get install -y libgd-dev libgeoip-dev libpam0g-dev libperl-dev
+####### END My additions
 
 	if [[ $MODSEC == 'y' ]]; then
 		# On distros that still ship the legacy PCRE, ModSecurity needs libpcre++
@@ -550,6 +599,36 @@ case $OPTION in
 		tar xaf v${NGXECHO_VER}.tar.gz
 	fi
 
+####### My addition
+
+        # Download auth-pam-module
+        if [[ $AUTHPAM == 'y' ]]; then
+                cd /usr/local/src/nginx/modules || exit 1
+                wget https://github.com/sto/ngx_http_auth_pam_module/archive/refs/tags/v${AUTHPAM_VER}.tar.gz
+                tar xaf v${AUTHPAM_VER}.tar.gz
+        fi
+
+        # Download upstream-fair-module
+        if [[ $USFAIR == 'y' ]]; then
+                cd /usr/local/src/nginx/modules || exit 1
+
+                # Fixes applied, recommended per https://share.google/aimode/JFL7z51xLcSQasnuc
+                wget https://codeload.github.com/itoffshore/nginx-upstream-fair/zip/refs/heads/master -O upstream_fair_module.zip
+                
+                # These were the old configs, kept for posterity's sake -- can be removed
+                ##wget https://codeload.github.com/gnosek/nginx-upstream-fair/zip/refs/heads/master -O upstream_fair_module.zip
+                #wget https://codeload.github.com/sysulq/nginx-upstream-fair/zip/refs/heads/master -O upstream_fair_module.zip
+                #unzip upstream_fair_module.zip
+
+                ## fixes required -- see another fork's diff here: https://github.com/gnosek/nginx-upstream-fair/commit/ff979a48a0ccb9217437021b5eb9378448c2bd9e
+
+                #sed 's/&& us->default_port == 0//g' /usr/local/src/nginx/modules/nginx-upstream-fair-master/ngx_http_upstream_fair_module.c > /usr/local/src/nginx/modules/nginx-upstream-fair-master/fixed.txt
+                #sed 's/u.port = (in_port_t) (us->port ? us->port : us->default_port)/u.port = us->port/g' /usr/local/src/nginx/modules/nginx-upstream-fair-master/fixed.txt > /usr/local/src/nginx/modules/nginx-upstream-fair-master/ngx_http_upstream_fair_module.c
+                #rm /usr/local/src/nginx/modules/nginx-upstream-fair-master/fixed.txt
+        fi
+
+####### END My additions
+
 	# Download zlib-ng
 	if [[ $ZLIBNG == 'y' ]]; then
 		cd /usr/local/src/nginx/modules || exit 1
@@ -711,7 +790,16 @@ case $OPTION in
 	fi
 
 	if [[ $RTMP == 'y' ]]; then
-		git clone --quiet https://github.com/arut/nginx-rtmp-module.git /usr/local/src/nginx/modules/nginx-rtmp-module
+
+####### My addition
+	# https://claude.ai/chat/8f483a34-2a5e-499a-bd66-1e5bd109d678
+	# Fork of arut's module, maintained by FreeBSD's nginx packager
+	git clone --quiet --depth 1 --branch v1.3.1 \
+		https://github.com/sysadmin-labs/nginx-rtmp-module.git \
+		/usr/local/src/nginx/modules/nginx-rtmp-module   # pinned release
+####### END My additions
+
+#		git clone --quiet https://github.com/arut/nginx-rtmp-module.git /usr/local/src/nginx/modules/nginx-rtmp-module
 		NGINX_MODULES=$(
 			echo "$NGINX_MODULES"
 			echo --add-module=/usr/local/src/nginx/modules/nginx-rtmp-module
@@ -777,6 +865,25 @@ case $OPTION in
 			echo --add-module=/usr/local/src/nginx/modules/echo-nginx-module-${NGXECHO_VER}
 		)
 	fi
+
+####### My addition
+
+        if [[ $AUTHPAM == 'y' ]]; then
+                NGINX_MODULES=$(
+                        echo "$NGINX_MODULES"
+                        echo --add-module=/usr/local/src/nginx/modules/ngx_http_auth_pam_module-${AUTHPAM_VER}
+                )
+        fi
+
+        if [[ $USFAIR == 'y' ]]; then
+                NGINX_MODULES=$(
+                        echo "$NGINX_MODULES"
+                        echo --add-module=/usr/local/src/nginx/modules/nginx-upstream-fair-master
+                )
+        fi
+
+####### END My addition
+
 
 	if [[ $ZLIBNG == 'y' ]]; then
 		NGINX_MODULES=$(
@@ -884,11 +991,17 @@ case $OPTION in
 		sed -i 's/^\(CFLAGS.*\)/\1 -fstack-protector-strong -Wno-sign-compare -Wno-unused-function/' objs/Makefile
 	fi
 
+####### My addition
+        echo ./configure $NGINX_OPTIONS $NGINX_MODULES >> config_command.txt
+####### END My addition
+
 	make -j "$(nproc)"
 	make install
 
-	# remove debugging symbols
-	strip -s /usr/sbin/nginx
+####### My addition: commenting out the following lines
+#       # remove debugging symbols
+#       strip -s /usr/sbin/nginx
+####### END My addition
 
 	# Nginx installation from source does not add an init script for systemd and logrotate
 	# Using the official systemd script and logrotate conf from nginx.org
@@ -932,8 +1045,10 @@ case $OPTION in
 		echo -e 'Package: nginx*\nPin: release *\nPin-Priority: -1' >nginx-block
 	fi
 
-	# Removing temporary Nginx and modules files
-	rm -r /usr/local/src/nginx
+####### My addition: commented out the rm line
+        # Removing temporary Nginx and modules files
+        ####### rm -r /usr/local/src/nginx
+####### END My addition
 
 	# We're done !
 	echo "Installation done."
